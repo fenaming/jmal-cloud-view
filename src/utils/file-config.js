@@ -1,0 +1,130 @@
+import fileApi from '@/api/file-api'
+import togetherApi from '@/api/together-api'
+import spaceApi from '@/api/space-api'
+import store from '@/store'
+
+export default {
+  baseUrl: '/api',
+  // 网盘logo
+  logoUrl: function(filename) {
+    return window.location.origin + `${this.baseUrl}/file/${filename}`
+  },
+  // webDAV的url
+  webDAVUrl: function(username) {
+    return window.location.origin + `${this.baseUrl}/webDAV/${username}`
+  },
+  // office api url
+  officeApiUrl: function() {
+    return `${window.location.origin}/office/web-apps/apps/api/documents/api.js`
+  },
+  // office回调url
+  officeCallBackUrl: function(token, username, fileId) {
+    return `${window.location.origin}${this.baseUrl}/office/track?jmal-token=${token}&name=${username}&fileId=${fileId}`
+  },
+  // 预览文件的url
+  previewUrl: function(username, file, token, shareToken) {
+    let owner = null
+    if (username !== store.getters.name || localStorage.getItem('mountFileOwner') !== undefined) {
+      owner = localStorage.getItem('mountFileOwner')
+    } else {
+      owner = username
+    }
+    if (owner == null) {
+      owner = store.getters.name
+    }
+    if (file.isTogether != null && file.isTogether){
+      owner = 'together'
+    }
+    if (file.spaceFlag){
+      owner = file.spaceFlag
+    }
+    let fileUrl = `${this.baseUrl}/file/${owner}${encodeURI(file.path)}${encodeURI(file.name)}`
+    fileUrl = fileUrl.replace(/%5C/g, '/')
+    if (token) {
+      return `${fileUrl}?jmal-token=${token}&name=${username}`
+    }
+    if (shareToken) {
+      return `${fileUrl}?share-token=${shareToken}`
+    }
+    return fileUrl
+  },
+  // 预览历史文件
+  previewHistoryUrl: function(historyId, name, token) {
+    return `${this.baseUrl}/history/preview/file?id=${historyId}&name=${name}&jmal-token=${token}`
+  },
+  // markdown里上传图片后的图片预览地址
+  markdownPreviewUrl: function (path){
+    return window.location.origin + `${this.baseUrl}${path}`
+  },
+  // 预览文件
+  preview: function(username, file, token) {
+    let url = this.previewUrl(username, file, token)
+    url = url.replace(/%5C/g, '/')
+    window.open(url, '_blank')
+  },
+  // 根据文件的空间类型获取正确的下载权限检查Promise
+  _checkDownloadPermission: function(file) {
+    if (file && file.isTogether) {
+      return togetherApi.isAllowDownload()
+    } else if (file && file.spaceFlag) {
+      return spaceApi.isAllowDownload({ spaceFlag: file.spaceFlag })
+    }
+    return fileApi.isAllowDownload()
+  },
+  // 下载文件
+  download: function(username, file, token) {
+    this._checkDownloadPermission(file).then(() => {
+      let url = this.previewUrl(username, file, token) + '&o=download'
+      window.open(url, '_self')
+    })
+  },
+  // 打包下载文件
+  packageDownload: function(fileIds, token, username) {
+    fileApi.isAllowDownload().then(() => {
+      window.open(`${this.baseUrl}/packageDownload?fileIds=${fileIds}&jmal-token=${token}&name=${username}`, '_self')
+    })
+  },
+  // 打包下载文件-共享空间
+  packageDownloadTogether: function(fileIds, token, username) {
+    togetherApi.isAllowDownload().then(() => {
+      window.open(`${this.baseUrl}/together/packageDownload?fileIds=${fileIds}&jmal-token=${token}&name=${username}`, '_self')
+    })
+  },
+  // 打包下载文件-图纸库
+  packageDownloadSpace: function(fileIds, token, username, spaceFlag) {
+    spaceApi.isAllowDownload({ spaceFlag: spaceFlag }).then(() => {
+      window.open(`${this.baseUrl}/space/packageDownload?fileIds=${fileIds}&jmal-token=${token}&name=${username}&spaceFlag=${spaceFlag}`, '_self')
+    })
+  },
+  // 共享文件下载
+  publicDownload: function(shareId, file, shareToken) {
+    window.open(this.publicDownloadUrl(shareId, file, shareToken), '_self')
+  },
+  // 共享文件预览
+  publicPreview: function(file, shareId, shareToken) {
+    const url = this.publicPreviewUrl(file, shareId, shareToken)
+    window.open(url, '_blank')
+  },
+  // 共享文件预览Url
+  publicPreviewUrl: function(file, shareId, shareToken) {
+    if (!shareToken) {
+      shareToken = "none"
+    }
+    return `${this.baseUrl}/public/s/preview/${file.name}?fileId=${file.id}&shareId=${shareId}&shareToken=${shareToken}`
+  },
+  // 共享文件打包下载
+  publicPackageDownload: function(shareId, fileIds, shareToken) {
+    window.open(this.publicPackageDownloadUrl(shareId, fileIds, shareToken), '_self')
+  },
+  // 共享文件下载Url
+  publicDownloadUrl: function(shareId, file, shareToken) {
+    if (!shareToken) {
+      shareToken = "none"
+    }
+    return window.location.origin + `${this.baseUrl}/public/s/download/${file.name}?fileId=${file.id}&shareId=${shareId}&shareToken=${shareToken}`
+  },
+  // 共享文件打包下载Url
+  publicPackageDownloadUrl: function(shareId, fileIds, shareToken) {
+    return window.location.origin + `${this.baseUrl}/public/s/packageDownload?shareId=${shareId}&fileIds=${fileIds}&share-token=${shareToken}`
+  },
+}
